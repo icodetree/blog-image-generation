@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>블로그 이미지 자동 삽입 도구</title>
+  <link rel="stylesheet" href="style.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+KR:wght@400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+  <div class="app">
+    <!-- 헤더 -->
+    <header class="header">
+      <div class="header-content">
+        <h1 class="logo">
+          <span class="logo-icon">🖼️</span>
+          블로그 이미지 자동 삽입
+        </h1>
+        <p class="subtitle">글을 붙여넣으면 AI가 분석하여 이미지를 자동 삽입합니다</p>
+      </div>
+    </header>
+
+    <!-- 메인 컨텐츠 -->
+    <main class="main">
+      <!-- 입력 패널 -->
+      <section class="panel input-panel">
+        <div class="panel-header">
+          <h2 class="panel-title">📝 블로그 글 입력</h2>
+          <div class="panel-actions">
+            <label class="toggle-label">
+              <input type="checkbox" id="useAI" checked>
+              <span class="toggle-slider"></span>
+              <span class="toggle-text">AI 분석</span>
+            </label>
+            <label class="toggle-label">
+              <input type="checkbox" id="optimize">
+              <span class="toggle-slider"></span>
+              <span class="toggle-text">이미지 최적화</span>
+            </label>
+          </div>
+        </div>
+        <textarea 
+          id="blogContent" 
+          class="content-input"
+          placeholder="여기에 블로그 글 HTML을 붙여넣으세요...
+
+예시:
+<h2>맥미니 M4 리뷰</h2>
+<p>맥미니 M4는 Apple의 최신 데스크톱 컴퓨터입니다...</p>
+<h3>성능 비교</h3>
+<p>이전 모델 대비 성능이 크게 향상되었습니다...</p>"
+        ></textarea>
+        <div class="button-group">
+          <button id="analyzeBtn" class="btn btn-primary" onclick="handleAnalyze()">
+            <span class="btn-icon">🔍</span> 분석하기
+          </button>
+          <button id="processBtn" class="btn btn-accent" onclick="handleProcess()">
+            <span class="btn-icon">🚀</span> 전체 처리 (분석 + 이미지 + HTML)
+          </button>
+          <button class="btn btn-ghost" onclick="loadSample()">
+            <span class="btn-icon">📋</span> 샘플 불러오기
+          </button>
+        </div>
+      </section>
+
+      <!-- 분석 결과 패널 -->
+      <section class="panel result-panel" id="analysisPanel" style="display:none">
+        <div class="panel-header">
+          <h2 class="panel-title">📍 분석 결과</h2>
+          <span class="badge" id="sectionCount">0개 섹션</span>
+        </div>
+        <div id="analysisResult" class="analysis-cards"></div>
+      </section>
+
+      <!-- 개별 이미지 섹션 생성기 -->
+      <section class="panel quick-panel">
+        <div class="panel-header">
+          <h2 class="panel-title">⚡ 빠른 이미지 섹션 생성</h2>
+        </div>
+        <div class="quick-form">
+          <input type="text" id="quickKeyword" class="input" placeholder="검색 키워드 (영어 추천, 예: mac mini m4)">
+          <select id="quickLayout" class="select">
+            <option value="image-single-landscape">1장 - 가로형</option>
+            <option value="image-grid-2">2장 - 좌우 배치</option>
+            <option value="image-grid-3">3장 - 1+2 레이아웃</option>
+            <option value="image-grid-4">4장 - 2x2 그리드</option>
+            <option value="image-compare">비교형 - Before/After</option>
+          </select>
+          <input type="text" id="quickCaption" class="input" placeholder="캡션 (선택사항)">
+          <button class="btn btn-primary" onclick="handleQuickGenerate()">
+            <span class="btn-icon">⚡</span> 생성
+          </button>
+        </div>
+        <div id="quickResult" class="quick-result" style="display:none">
+          <div class="code-header">
+            <span>생성된 HTML</span>
+            <button class="btn btn-sm btn-ghost" onclick="copyQuickResult()">📋 복사</button>
+          </div>
+          <pre><code id="quickCode"></code></pre>
+          <div id="quickPreview" class="preview-box"></div>
+        </div>
+      </section>
+
+      <!-- 최종 결과 패널 -->
+      <section class="panel output-panel" id="outputPanel" style="display:none">
+        <div class="panel-header">
+          <h2 class="panel-title">✅ 최종 결과</h2>
+          <div class="panel-actions">
+            <button class="btn btn-sm btn-primary" onclick="copyFullResult()">
+              <span class="btn-icon">📋</span> 전체 HTML 복사
+            </button>
+            <button class="btn btn-sm btn-ghost" onclick="copySectionsOnly()">
+              이미지 섹션만 복사
+            </button>
+          </div>
+        </div>
+        <div id="statsBar" class="stats-bar"></div>
+        
+        <!-- 탭: HTML / 프리뷰 -->
+        <div class="tab-bar">
+          <button class="tab active" onclick="switchTab('html')">HTML 코드</button>
+          <button class="tab" onclick="switchTab('preview')">프리뷰</button>
+          <button class="tab" onclick="switchTab('sections')">이미지 섹션만</button>
+        </div>
+        
+        <div id="tabHtml" class="tab-content active">
+          <pre><code id="fullHtmlCode"></code></pre>
+        </div>
+        <div id="tabPreview" class="tab-content">
+          <div id="previewFrame" class="preview-frame"></div>
+        </div>
+        <div id="tabSections" class="tab-content">
+          <div id="sectionsOnly"></div>
+        </div>
+      </section>
+    </main>
+
+    <!-- 로딩 오버레이 -->
+    <div id="loadingOverlay" class="loading-overlay" style="display:none">
+      <div class="loading-content">
+        <div class="spinner"></div>
+        <p id="loadingText" class="loading-text">처리 중...</p>
+      </div>
+    </div>
+
+    <!-- 토스트 메시지 -->
+    <div id="toast" class="toast"></div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
