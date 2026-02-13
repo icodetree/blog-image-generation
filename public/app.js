@@ -317,11 +317,11 @@ function showToast(message) {
 
 function getLayoutLabel(layout) {
   const labels = {
-    'image-single-landscape': '1장 가로형',
-    'image-single-portrait': '1장 세로형',
-    'image-grid-2': '2장 비교',
-    'image-grid-3': '3장 (1+2)',
-    'image-grid-4': '4장 그리드',
+    'image-single-landscape': '1장 - 가로형',
+    'image-single-portrait': '1장 - 세로형',
+    'image-grid-2': '2장 - 가로 2개',
+    'image-grid-3': '3장 - 가로 3개',
+    'image-grid-4': '4장 - 가로 4개',
     'image-compare': '비교형'
   };
   return labels[layout] || layout;

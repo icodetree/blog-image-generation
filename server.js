@@ -27,6 +27,10 @@ if (!fs.existsSync(outputDir)) {
 }
 app.use('/images', express.static(outputDir));
 
+// API 키 확인
+const apiKey = process.env.OPENAI_API_KEY || process.env.ANTHROPIC_API_KEY;
+const hasValidKey = apiKey && apiKey !== 'sk-xxxxx';
+
 // ==========================================
 // API 엔드포인트
 // ==========================================
@@ -46,10 +50,10 @@ app.post('/api/analyze', async (req, res) => {
     console.log(`\n📝 블로그 글 분석 시작 (${content.length}자)...`);
 
     let analysis;
-    if (useAI && process.env.OPENAI_API_KEY && process.env.OPENAI_API_KEY !== 'sk-xxxxx') {
+    if (useAI && hasValidKey) {
       analysis = await analyzeBlogPost(content);
     } else {
-      console.log('  ℹ️  OpenAI API 키 없음 → 규칙 기반 분석 사용');
+      if (!hasValidKey) console.log('  ℹ️  API 키 없음 → 규칙 기반 분석 사용');
       analysis = analyzeBlogPostSimple(content);
     }
 
@@ -105,9 +109,10 @@ app.post('/api/process', async (req, res) => {
     // 1단계: 글 분석
     console.log('\n📝 1단계: 글 분석...');
     let analysis;
-    if (useAI && process.env.OPENAI_API_KEY && process.env.OPENAI_API_KEY !== 'sk-xxxxx') {
+    if (useAI && hasValidKey) {
       analysis = await analyzeBlogPost(content);
     } else {
+      if (!hasValidKey) console.log('  ℹ️  API 키 없음 → 규칙 기반 분석 사용');
       analysis = analyzeBlogPostSimple(content);
     }
 
@@ -219,7 +224,17 @@ app.listen(PORT, () => {
   console.log(`📍 http://localhost:${PORT}`);
   console.log('='.repeat(50));
   console.log(`\n설정 상태:`);
-  console.log(`  OpenAI API: ${process.env.OPENAI_API_KEY && process.env.OPENAI_API_KEY !== 'sk-xxxxx' ? '✅ 연결됨' : '❌ 미설정 (규칙 기반 분석 사용)'}`);
+  
+  if (hasValidKey) {
+     if (apiKey.startsWith('sk-ant-')) {
+       console.log(`  AI API: ✅ Anthropic Claude (Haiku) 연결됨`);
+     } else {
+       console.log(`  AI API: ✅ OpenAI GPT (4o-mini) 연결됨`);
+     }
+  } else {
+    console.log(`  AI API: ❌ 미설정 (규칙 기반 분석 사용)`);
+  }
+  
   console.log(`  Unsplash API: ${process.env.UNSPLASH_ACCESS_KEY && process.env.UNSPLASH_ACCESS_KEY !== 'your_unsplash_access_key' ? '✅ 연결됨' : '⚠️ Source URL 폴백 사용'}`);
-  console.log(`\n💡 팁: .env 파일에 API 키를 설정하면 더 정확한 분석이 가능합니다.\n`);
+  console.log(`\n💡 팁: Claude API 키(sk-ant-...)도 지원합니다.\n`);
 });
