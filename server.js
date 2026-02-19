@@ -9,12 +9,12 @@ const path = require('path');
 const fs = require('fs');
 
 const { analyzeBlogPost, analyzeBlogPostSimple } = require('./lib/analyzer');
-const { searchImages, downloadImage, getImageCount } = require('./lib/image-search');
+const { searchImages, generateImages, downloadImage, getImageCount } = require('./lib/image-search');
 const { optimizeImage, optimizeBatch } = require('./lib/optimizer');
 const { generateImageSection, insertImageSections, generateImageSectionsOnly } = require('./lib/html-builder');
 
 const app = express();
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 3010;
 
 // 미들웨어
 app.use(express.json({ limit: '10mb' }));
@@ -129,9 +129,24 @@ app.post('/api/process', async (req, res) => {
     console.log(`\n🔍 2단계: ${analysis.sections.length}개 섹션 이미지 검색...`);
     const processedSections = [];
 
+    // 옵션: AI 생성 폴백 사용 여부
+    const searchOptions = {
+      fallbackToGen: req.body.fallbackToGen || false
+    };
+
     for (const section of analysis.sections) {
       const imageCount = getImageCount(section.layout);
-      const images = await searchImages(section.searchKeywords, imageCount);
+      let images = [];
+
+      // 마커에서 'generate' 소스를 명시했으면 바로 생성
+      if (section.source === 'generate') {
+        console.log(`\n🎨 명시적 생성 요청 (Marker): "${section.searchKeywords.join(' ')}"`);
+        const { generateImages } = require('./lib/image-search'); // Ensure import or use top-level
+        images = await generateImages(section.searchKeywords.join(' '), imageCount);
+      } else {
+        // 그 외에는 검색 (옵션에 따라 폴백)
+        images = await searchImages(section.searchKeywords, imageCount, searchOptions);
+      }
 
       // 3단계: 이미지 다운로드 + 최적화 (선택)
       const processedImages = [];
@@ -194,10 +209,34 @@ app.post('/api/process', async (req, res) => {
  */
 app.post('/api/generate-section', async (req, res) => {
   try {
-    const { keywords, layout, caption } = req.body;
+    const { keywords, layout, caption, source } = req.body;
 
     const imageCount = getImageCount(layout || 'image-single-landscape');
-    const images = await searchImages(keywords || ['blog'], imageCount);
+    let images = [];
+
+    if (source === 'generate') {
+      console.log(`\n🎨 빠른 생성: AI 이미지 생성 요청 ("${keywords?.join(' ')}")`);
+      const { generateImages } = require('./lib/image-search'); // Ensure import
+      images = await generateImages(keywords?.join(' '), imageCount);
+
+      // Generation failed (e.g., 429 or 404), fallback to placeholder to prevent UI breakage
+      if (!images || images.length === 0) {
+        console.warn('  ⚠️ Generation returned no images (Quota exceeded?), falling back to placeholder.');
+        const { searchPlaceholder } = require('./lib/image-search'); // Need to export this or mock it
+        // Actually searchPlaceholder is internal to image-search.js.
+        // Let's use searchImages with a specific flag or just handle it here.
+        // Better: searchImages calls generateImages.
+        // Let's just manually create a placeholder here for safety.
+        images = Array(imageCount).fill(0).map((_, i) => ({
+          url: `https://placehold.co/800x600?text=${encodeURIComponent('Generation Warning')}`,
+          alt: 'Image generation failed',
+          credit: { name: 'System', link: '#' }
+        }));
+      }
+    } else {
+      // Default: Search
+      images = await searchImages(keywords || ['blog'], imageCount);
+    }
 
     const imageData = images.map(img => ({
       url: img.url,
@@ -217,6 +256,25 @@ app.post('/api/generate-section', async (req, res) => {
   }
 });
 
+/**
+ * POST /api/generate-image
+ * 직접 이미지 생성 요청 (Gemini)
+ */
+app.post('/api/generate-image', async (req, res) => {
+  try {
+    const { prompt, count } = req.body;
+    if (!prompt) return res.status(400).json({ error: '프롬프트를 입력해주세요.' });
+
+    const { generateImages } = require('./lib/image-search');
+    const images = await generateImages(prompt, count || 1);
+
+    res.json({ success: true, images });
+  } catch (error) {
+    console.error('❌ 이미지 생성 오류:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // 서버 시작
 app.listen(PORT, () => {
   console.log('\n' + '='.repeat(50));
@@ -224,17 +282,17 @@ app.listen(PORT, () => {
   console.log(`📍 http://localhost:${PORT}`);
   console.log('='.repeat(50));
   console.log(`\n설정 상태:`);
-  
+
   if (hasValidKey) {
-     if (apiKey.startsWith('sk-ant-')) {
-       console.log(`  AI API: ✅ Anthropic Claude (Haiku) 연결됨`);
-     } else {
-       console.log(`  AI API: ✅ OpenAI GPT (4o-mini) 연결됨`);
-     }
+    if (apiKey.startsWith('sk-ant-')) {
+      console.log(`  AI API: ✅ Anthropic Claude (Haiku) 연결됨`);
+    } else {
+      console.log(`  AI API: ✅ OpenAI GPT (4o-mini) 연결됨`);
+    }
   } else {
     console.log(`  AI API: ❌ 미설정 (규칙 기반 분석 사용)`);
   }
-  
+
   console.log(`  Unsplash API: ${process.env.UNSPLASH_ACCESS_KEY && process.env.UNSPLASH_ACCESS_KEY !== 'your_unsplash_access_key' ? '✅ 연결됨' : '⚠️ Source URL 폴백 사용'}`);
   console.log(`\n💡 팁: Claude API 키(sk-ant-...)도 지원합니다.\n`);
 });

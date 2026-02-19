@@ -16,12 +16,12 @@ async function apiCall(endpoint, data) {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(data)
   });
-  
+
   if (!response.ok) {
     const err = await response.json();
     throw new Error(err.error || '서버 오류가 발생했습니다.');
   }
-  
+
   return response.json();
 }
 
@@ -37,9 +37,9 @@ async function handleAnalyze() {
   }
 
   const useAI = document.getElementById('useAI').checked;
-  
+
   showLoading('블로그 글 분석 중...');
-  
+
   try {
     const result = await apiCall('analyze', { content, useAI });
     lastAnalysis = result.analysis;
@@ -65,11 +65,17 @@ async function handleProcess() {
 
   const useAI = document.getElementById('useAI').checked;
   const optimize = document.getElementById('optimize').checked;
+  const useGenAI_Fallback = document.getElementById('useGenAI_Fallback').checked;
 
-  showLoading('전체 처리 중... (분석 → 이미지 검색 → HTML 생성)');
+  showLoading('전체 처리 중... (분석 → 이미지 검색/생성 → HTML 생성)');
 
   try {
-    const result = await apiCall('process', { content, useAI, optimize });
+    const result = await apiCall('process', {
+      content,
+      useAI,
+      optimize,
+      fallbackToGen: useGenAI_Fallback
+    });
     lastResult = result;
 
     // 분석 결과도 표시
@@ -102,19 +108,21 @@ async function handleQuickGenerate() {
   const keyword = document.getElementById('quickKeyword').value.trim();
   const layout = document.getElementById('quickLayout').value;
   const caption = document.getElementById('quickCaption').value.trim();
+  const source = document.querySelector('input[name="quickSource"]:checked').value; // 'search' or 'generate'
 
   if (!keyword) {
     showToast('⚠️ 검색 키워드를 입력해주세요.');
     return;
   }
 
-  showLoading('이미지 검색 + HTML 생성 중...');
+  showLoading(source === 'generate' ? '🎨 AI 이미지 생성 중 (Nano Banana)...' : '🔍 이미지 검색 + HTML 생성 중...');
 
   try {
     const result = await apiCall('generate-section', {
       keywords: keyword.split(/[,\s]+/).filter(Boolean),
       layout,
-      caption
+      caption,
+      source // new param
     });
 
     // 결과 표시
